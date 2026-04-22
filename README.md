@@ -13,6 +13,11 @@ Clipflow is a high-performance terminal-based toolkit designed to transform long
 
 ## 🚀 Getting Started
 
+# Make sure your venv is active eveytime 
+```
+.\backend\venv\Scripts\activate
+```
+
 ### 1. Prerequisites
 -   **Python 3.8+**
 -   **FFmpeg** (Handled automatically by the script via `static-ffmpeg`)
