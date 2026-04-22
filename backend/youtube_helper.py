@@ -17,6 +17,7 @@ def fetch_youtube_video_info(url: str, download_video=False, output_dir="downloa
         
         ydl_opts = {
             'quiet': True,
+            'no_warnings': True,
             'format': 'bestvideo[height<=1080][ext=mp4]+bestaudio[ext=m4a]/best[height<=1080][ext=mp4]/best',
             'noplaylist': True,
         }

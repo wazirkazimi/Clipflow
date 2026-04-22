@@ -53,6 +53,9 @@ def run_youtube_cli():
     use_gameplay = input("\033[94m[?]\033[0m Include gameplay background (Split-Screen)? [y/n] (default y): ").strip().lower()
     use_gameplay = use_gameplay != 'n' # Default to true unless 'n'
 
+    use_captions = input("\033[94m[?]\033[0m Add viral captions (word-highlighted)? [y/n] (default y): ").strip().lower()
+    use_captions = use_captions != 'n'
+
     gameplay_path = "assets/gameplay/subway_surfer_loop.mp4"
     if use_gameplay:
         print("\n\033[94m[?]\033[0m Select Gameplay Background:")
@@ -115,7 +118,8 @@ def run_youtube_cli():
                 output_path=out_file,
                 start_time=start_time,
                 duration=clip_duration,
-                main_audio_path=audio_path
+                main_audio_path=audio_path,
+                add_captions=use_captions
             )
         else:
             success, res = create_vertical_crop_short(
@@ -123,7 +127,8 @@ def run_youtube_cli():
                 output_path=out_file,
                 start_time=start_time,
                 duration=clip_duration,
-                main_audio_path=audio_path
+                main_audio_path=audio_path,
+                add_captions=use_captions
             )
             
         if success:

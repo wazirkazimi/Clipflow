@@ -31,6 +31,9 @@ def run_instagram_cli():
     use_gameplay = input("\033[94m[?]\033[0m Include gameplay background (Split-Screen)? [y/n] (default y): ").strip().lower()
     use_gameplay = use_gameplay != 'n'
 
+    use_captions = input("\033[94m[?]\033[0m Add viral captions (word-highlighted)? [y/n] (default y): ").strip().lower()
+    use_captions = use_captions != 'n'
+
     gameplay_path = "assets/gameplay/subway_surfer_loop.mp4"
     if use_gameplay:
         print("\n\033[94m[?]\033[0m Select Gameplay Background:")
@@ -64,10 +67,21 @@ def run_instagram_cli():
         print("\n\033[96m[2/2]\033[0m Processing Video...")
         
         if use_gameplay:
-            success, result = create_reel_composite_video(reel_video_path=main_video_path, gameplay_video_path=gameplay_path, output_path=output_path)
+            success, result = create_reel_composite_video(
+                reel_video_path=main_video_path, 
+                gameplay_video_path=gameplay_path, 
+                output_path=output_path,
+                add_captions=use_captions
+            )
         else:
             duration = get_video_duration(main_video_path) or 30.0
-            success, result = create_vertical_crop_short(main_video_path=main_video_path, output_path=output_path, start_time=0, duration=duration)
+            success, result = create_vertical_crop_short(
+                main_video_path=main_video_path, 
+                output_path=output_path, 
+                start_time=0, 
+                duration=duration,
+                add_captions=use_captions
+            )
         
         if success:
             print("\n" + "="*50)
