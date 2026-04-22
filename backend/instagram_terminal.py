@@ -34,6 +34,13 @@ def run_instagram_cli():
     use_captions = input("\033[94m[?]\033[0m Add viral captions (word-highlighted)? [y/n] (default y): ").strip().lower()
     use_captions = use_captions != 'n'
 
+    is_hindi = False
+    if use_captions:
+        is_hindi_input = input("\033[94m[?]\033[0m Is the speech in Hindi? [y/n] (default n): ").strip().lower()
+        is_hindi = is_hindi_input == 'y'
+    
+    forced_lang = 'hi' if is_hindi else None
+
     gameplay_path = "assets/gameplay/subway_surfer_loop.mp4"
     if use_gameplay:
         print("\n\033[94m[?]\033[0m Select Gameplay Background:")
@@ -71,7 +78,8 @@ def run_instagram_cli():
                 reel_video_path=main_video_path, 
                 gameplay_video_path=gameplay_path, 
                 output_path=output_path,
-                add_captions=use_captions
+                add_captions=use_captions,
+                forced_language=forced_lang
             )
         else:
             duration = get_video_duration(main_video_path) or 30.0
@@ -80,7 +88,8 @@ def run_instagram_cli():
                 output_path=output_path, 
                 start_time=0, 
                 duration=duration,
-                add_captions=use_captions
+                add_captions=use_captions,
+                forced_language=forced_lang
             )
         
         if success:

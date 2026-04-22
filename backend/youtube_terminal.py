@@ -56,6 +56,13 @@ def run_youtube_cli():
     use_captions = input("\033[94m[?]\033[0m Add viral captions (word-highlighted)? [y/n] (default y): ").strip().lower()
     use_captions = use_captions != 'n'
 
+    is_hindi = False
+    if use_captions:
+        is_hindi_input = input("\033[94m[?]\033[0m Is the speech in Hindi? [y/n] (default n): ").strip().lower()
+        is_hindi = is_hindi_input == 'y'
+
+    forced_lang = 'hi' if is_hindi else None
+
     gameplay_path = "assets/gameplay/subway_surfer_loop.mp4"
     if use_gameplay:
         print("\n\033[94m[?]\033[0m Select Gameplay Background:")
@@ -102,14 +109,19 @@ def run_youtube_cli():
     output_dir = os.path.join("exports", "youtube")
     os.makedirs(output_dir, exist_ok=True)
 
-    print(f"\n\033[96m[2/3]\033[0m Generating {len(top_moments)} clips...")
-    for i, moment in enumerate(top_moments):
+    print(f"\n\033[96m[2/3]\033[0m Generating {len(top_moments)} clips (Parallel Processing)...")
+    
+    from concurrent.futures import ThreadPoolExecutor
+    
+    def process_single_moment(args):
+        i, moment = args
         start_time = moment['start_time']
         rating = round(moment['value'] * 100, 1) if 'value' in moment else 0
         
         filename = f"clip_{i+1}_rating_{rating}_at_{int(start_time)}s.mp4"
         out_file = os.path.join(output_dir, filename)
-        print(f"      -> Processing Clip {i+1} [Rating: {rating}] at {int(start_time)}s...")
+        
+        print(f"      -> Starting Clip {i+1} [Rating: {rating}] at {int(start_time)}s...")
         
         if use_gameplay:
             success, res = create_split_screen_short(
@@ -119,7 +131,8 @@ def run_youtube_cli():
                 start_time=start_time,
                 duration=clip_duration,
                 main_audio_path=audio_path,
-                add_captions=use_captions
+                add_captions=use_captions,
+                forced_language=forced_lang
             )
         else:
             success, res = create_vertical_crop_short(
@@ -128,13 +141,19 @@ def run_youtube_cli():
                 start_time=start_time,
                 duration=clip_duration,
                 main_audio_path=audio_path,
-                add_captions=use_captions
+                add_captions=use_captions,
+                forced_language=forced_lang
             )
             
         if success:
             print(f"         \033[92m✅ Saved: {filename}\033[0m")
         else:
             print(f"         \033[91m❌ Failed: {res}\033[0m")
+        return success
+
+    # Use 2-3 parallel workers to speed up but not freeze the PC
+    with ThreadPoolExecutor(max_workers=3) as executor:
+        list(executor.map(process_single_moment, enumerate(top_moments)))
 
     print("\n" + "="*50)
     print(f"\033[92m[+] SUCCESS! Batch generation complete.\033[0m")

@@ -20,10 +20,23 @@ def format_timestamp(seconds: float):
     millis = int(td.microseconds / 10000)
     return f"{hours:01d}:{minutes:02d}:{secs:02d}.{millis:02d}"
 
-def generate_subtitles(video_path: str, output_ass_path: str, start_time: float = None, duration: float = None):
+def is_hindi_script(text: str) -> bool:
+    """Checks if a string contains Devanagari (Hindi) characters."""
+    return any('\u0900' <= c <= '\u097f' for c in text)
+
+def is_urdu_script(text: str) -> bool:
+    """Checks if a string contains Urdu/Arabic characters."""
+    return any('\u0600' <= c <= '\u06ff' for c in text)
+
+import threading
+
+WHISPER_MODEL_CACHE = {}
+WHISPER_LOCK = threading.Lock()
+
+def generate_subtitles(video_path: str, output_ass_path: str, start_time: float = None, duration: float = None, forced_language: str = None):
     """
     Generates an ASS subtitle file with word-level highlighting using OpenAI Whisper.
-    Optimized to only transcribe the required segment.
+    Optimized to only transcribe the required segment and reuse the AI model with thread safety.
     """
     try:
         import whisper
@@ -31,6 +44,18 @@ def generate_subtitles(video_path: str, output_ass_path: str, start_time: float 
         logger.error("OpenAI Whisper not installed. Run 'pip install openai-whisper torch'")
         return False
 
+    global WHISPER_MODEL_CACHE, WHISPER_LOCK
+    device = "cuda" if torch.cuda.is_available() else "cpu"
+    
+    if "model" not in WHISPER_MODEL_CACHE:
+        # We lock the loading part too just in case
+        with WHISPER_LOCK:
+            if "model" not in WHISPER_MODEL_CACHE:
+                # Upgrading to 'base' for much better Hindi/Hinglish accuracy
+                logger.info(f"Loading Whisper 'base' model into memory ({device})...")
+                WHISPER_MODEL_CACHE["model"] = whisper.load_model("base", device=device)
+    
+    model = WHISPER_MODEL_CACHE["model"]
     temp_audio = output_ass_path.replace(".ass", "_temp.wav")
     
     try:
@@ -43,12 +68,29 @@ def generate_subtitles(video_path: str, output_ass_path: str, start_time: float 
         subprocess.run(extract_cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=True)
 
         logger.info(f"Transcribing audio segment for captions...")
-        # Step 2: Use 'tiny' model for max speed
-        device = "cuda" if torch.cuda.is_available() else "cpu"
         fp16 = torch.cuda.is_available()
         
-        model = whisper.load_model("tiny", device=device)
-        result = model.transcribe(temp_audio, word_timestamps=True, fp16=fp16)
+        # Use a lock so multiple threads don't call the AI at once
+        with WHISPER_LOCK:
+            # We add a 'prompt' to guide Whisper towards Hinglish (Roman/Hindi/Urdu mixed)
+            initial_prompt = "Hindi, Urdu, Hinglish, business, motivation, startup."
+            result = model.transcribe(
+                temp_audio, 
+                word_timestamps=True, 
+                fp16=fp16, 
+                language=forced_language,
+                initial_prompt=initial_prompt
+            )
+        
+        # Print detected text to terminal to help debug
+        print(f"\n\033[93m[AI Raw Transcription]:\033[0m {result['text'][:100]}...")
+
+        try:
+            from indic_transliteration import sanscript
+            from indic_transliteration.sanscript import transliterate
+            has_indic = True
+        except ImportError:
+            has_indic = False
 
         with open(output_ass_path, "w", encoding="utf-8") as f:
             f.write("[Script Info]\n")
@@ -59,32 +101,51 @@ def generate_subtitles(video_path: str, output_ass_path: str, start_time: float 
             f.write("\n")
             f.write("[V4+ Styles]\n")
             f.write("Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding\n")
-            # Style: White text, Bold, centered (Alignment 5), Cyan highlight color (&H00FFFF)
-            f.write("Style: Default,Arial,85,&H00FFFFFF,&H000000FF,&H00000000,&H00000000,-1,0,0,0,100,100,0,0,1,3,2,5,10,10,100,1\n")
+            # Style: Impact font (bold/business style), White text, Yellow/Cyan highlight
+            f.write("Style: Default,Impact,100,&H00FFFFFF,&H000000FF,&H00000000,&H00000000,-1,0,0,0,100,100,0,0,1,3,2,5,10,10,100,1\n")
             f.write("\n")
             f.write("[Events]\n")
             f.write("Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text\n")
 
+            # Collect all words from all segments
+            all_words = []
             for segment in result['segments']:
-                words = segment.get('words', [])
-                if not words:
+                all_words.extend(segment.get('words', []))
+
+            # Group words into chunks of 3
+            chunk_size = 3
+            for i in range(0, len(all_words), chunk_size):
+                chunk = all_words[i : i + chunk_size]
+                if not chunk:
                     continue
+
+                # For each word in the chunk, create a dialogue event
+                for highlight_idx, current_word in enumerate(chunk):
+                    start_ts = format_timestamp(current_word['start'])
+                    end_ts = format_timestamp(current_word['end'])
                     
-                for i, word_data in enumerate(words):
-                    start_ts = format_timestamp(word_data['start'])
-                    end_ts = format_timestamp(word_data['end'])
-                    
-                    # Create a phrase for the segment where the current word is highlighted
-                    highlighted_phrase = ""
-                    for j, wd in enumerate(words):
-                        text = wd['word'].strip().upper()
-                        if j == i:
-                            # Highlight current word in Cyan
-                            highlighted_phrase += f"{{\\c&H00FFFF&}}{text}{{\\c&HFFFFFF&}} "
+                    # Build the chunk phrase with the current word highlighted
+                    phrase = ""
+                    for word_idx, wd in enumerate(chunk):
+                        text = wd['word'].strip()
+                        
+                        # Convert to Hinglish if Hindi or Urdu script is detected
+                        if has_indic:
+                            if is_hindi_script(text):
+                                text = transliterate(text, sanscript.DEVANAGARI, sanscript.ISO)
+                            elif is_urdu_script(text):
+                                # Using URDU scheme to Romanization
+                                text = transliterate(text, sanscript.URDU, sanscript.ISO)
+                        
+                        text = text.upper()
+                        
+                        if word_idx == highlight_idx:
+                            # Highlight current word in Yellow (&H0000FFFF) or Cyan (&H00FFFF)
+                            phrase += f"{{\\c&H00FFFF&}}{text}{{\\c&HFFFFFF&}} "
                         else:
-                            highlighted_phrase += f"{text} "
+                            phrase += f"{text} "
                     
-                    f.write(f"Dialogue: 0,{start_ts},{end_ts},Default,,0,0,0,,{highlighted_phrase.strip()}\n")
+                    f.write(f"Dialogue: 0,{start_ts},{end_ts},Default,,0,0,0,,{phrase.strip()}\n")
     
     except Exception as e:
         logger.error(f"Error during subtitle generation: {e}")
@@ -106,7 +167,8 @@ def create_split_screen_short(
     main_audio_path: str = None,
     width: int = 1080,
     height: int = 1920,
-    add_captions: bool = True
+    add_captions: bool = True,
+    forced_language: str = None
 ):
     """
     Creates a 9:16 YouTube Short by taking a segment from the main video,
@@ -161,7 +223,7 @@ def create_split_screen_short(
         if add_captions:
             ass_path = output_path.replace(".mp4", ".ass")
             source_for_audio = main_video_path if not main_audio_path else main_audio_path
-            if generate_subtitles(source_for_audio, ass_path, start_time, duration):
+            if generate_subtitles(source_for_audio, ass_path, start_time, duration, forced_language=forced_language):
                 escaped_ass_path = ass_path.replace("\\", "/").replace(":", "\\:")
                 command[command.index("-filter_complex") + 1] += f";[v]subtitles='{escaped_ass_path}'[v]"
             else:
@@ -232,7 +294,8 @@ def create_reel_composite_video(
     output_path: str,
     width: int = 1080,
     height: int = 1920,
-    add_captions: bool = True
+    add_captions: bool = True,
+    forced_language: str = None
 ):
     """
     Creates a composite MP4 video with the Instagram reel video at the top
@@ -275,10 +338,14 @@ def create_reel_composite_video(
         if add_captions:
             ass_path = output_path.replace(".mp4", ".ass")
             # For reels, we use the start of the file (0) and the reel's duration
-            if generate_subtitles(reel_video_path, ass_path, 0, reel_duration):
+            if generate_subtitles(reel_video_path, ass_path, 0, reel_duration, forced_language=forced_language):
                 escaped_ass_path = ass_path.replace("\\", "/").replace(":", "\\:")
                 command[command.index("-filter_complex") + 1] += f";[v]subtitles='{escaped_ass_path}'[v]"
-                command[command.index("-map") + 1] = "[v]"
+                # The mapping will be added below
+            else:
+                logger.warning("Captions requested but failed to generate.")
+
+        command += ["-map", "[v]"]
 
         command += [
             "-map", "0:a",  # Use audio from reel video
@@ -318,7 +385,8 @@ def create_vertical_crop_short(
     main_audio_path: str = None,
     width: int = 1080,
     height: int = 1920,
-    add_captions: bool = True
+    add_captions: bool = True,
+    forced_language: str = None
 ):
     """
     Creates a 9:16 vertical short by cropping the main video.
@@ -349,7 +417,7 @@ def create_vertical_crop_short(
         if add_captions:
             ass_path = output_path.replace(".mp4", ".ass")
             source_for_audio = main_video_path if not main_audio_path else main_audio_path
-            if generate_subtitles(source_for_audio, ass_path, start_time, duration):
+            if generate_subtitles(source_for_audio, ass_path, start_time, duration, forced_language=forced_language):
                 escaped_ass_path = ass_path.replace("\\", "/").replace(":", "\\:")
                 # For vertical crop, we used -vf. Let's switch to -filter_complex for consistency if we add logo
                 vf_val = command[command.index("-vf") + 1]
