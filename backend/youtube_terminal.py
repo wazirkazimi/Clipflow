@@ -9,6 +9,15 @@ import static_ffmpeg
 logging.basicConfig(level=logging.ERROR)
 static_ffmpeg.add_paths()
 
+GAMEPLAY_ASSETS = [
+    ("Temple Run", "assets/gameplay/temple_run.mp4", "https://youtu.be/TuGv1WIyUK4"),
+    ("Need for Speed Car", "assets/gameplay/nfs_car.mp4", "https://youtu.be/AJm-cwt0Ba8"),
+    ("Minecraft Parkour", "assets/gameplay/minecraft_parkour.mp4", "https://youtu.be/u7kdVe8q5zs"),
+    ("Ramp Car", "assets/gameplay/ramp_car.mp4", "https://youtu.be/GyO1MtLhyt0"),
+    ("BGMI", "assets/gameplay/bgmi.mp4", "https://youtu.be/ZWUV6IjPaaY"),
+]
+
+
 def clear_screen():
     os.system('cls' if os.name == 'nt' else 'clear')
 
@@ -16,6 +25,11 @@ def print_header():
     print("\033[91m" + "="*50)
     print("   CLIPFLOW YOUTUBE CLI GENERATOR")
     print("="*50 + "\033[0m")
+
+
+def gameplay_ready(path: str) -> bool:
+    return os.path.exists(path) and os.path.getsize(path) > 5_000_000
+
 
 def get_top_heatmap_moments(heatmap_data, count=3, min_distance=60.0):
     if not heatmap_data:
@@ -50,8 +64,17 @@ def run_youtube_cli():
     clip_duration = float(duration_input) if duration_input.replace('.','',1).isdigit() else 30.0
     clip_duration = min(clip_duration, 60.0)
 
-    use_gameplay = input("\033[94m[?]\033[0m Include gameplay background (Split-Screen)? [y/n] (default y): ").strip().lower()
-    use_gameplay = use_gameplay != 'n' # Default to true unless 'n'
+    format_input = input("\033[94m[?]\033[0m Video Format: Vertical (Shorts/Reels) or Horizontal (YouTube)? [v/h] (default v): ").strip().lower()
+    is_horizontal = format_input == 'h'
+
+    if is_horizontal:
+        target_width, target_height = 1920, 1080
+        use_gameplay = False
+        print("\033[93m[!] Horizontal format selected. Gameplay background disabled.\033[0m")
+    else:
+        target_width, target_height = 1080, 1920
+        use_gameplay_input = input("\033[94m[?]\033[0m Include gameplay background (Split-Screen)? [y/n] (default y): ").strip().lower()
+        use_gameplay = use_gameplay_input != 'n' # Default to true unless 'n'
 
     use_captions = input("\033[94m[?]\033[0m Add viral captions (word-highlighted)? [y/n] (default y): ").strip().lower()
     use_captions = use_captions != 'n'
@@ -63,29 +86,61 @@ def run_youtube_cli():
 
     forced_lang = 'hi' if is_hindi else None
 
-    gameplay_path = "assets/gameplay/subway_surfer_loop.mp4"
-    if use_gameplay:
-        print("\n\033[94m[?]\033[0m Select Gameplay Background:")
-        print(" 1. Subway Surfers")
-        print(" 2. Minecraft Parkour")
-        gameplay_choice = input(" Choice [1/2]: ").strip()
-        
-        gameplay_url = "https://www.youtube.com/watch?v=vTfD20dbxho"
-        if gameplay_choice == "2":
-            gameplay_path = "assets/gameplay/mc_parkour.mp4"
-            gameplay_url = "https://www.youtube.com/watch?v=n_Dv47ToG0Y"
+    gameplay_path = GAMEPLAY_ASSETS[0][1]
+    gameplay_paths = []
+    rotate_gameplay = False
 
-        # Ensure gameplay asset
-        if not os.path.exists(gameplay_path) or os.path.getsize(gameplay_path) < 100000:
-            print(f"\033[93m[!] Downloading gameplay background...\033[0m")
+    if use_gameplay:
+        rotate_input = input("\033[94m[?]\033[0m Rotate gameplay backgrounds across clips? [y/n] (default y): ").strip().lower()
+        rotate_gameplay = rotate_input != 'n'
+
+        if rotate_gameplay:
+            print("\n\033[94m[?]\033[0m Using rotating gameplay backgrounds for each clip:")
+            for idx, (label, path, _) in enumerate(GAMEPLAY_ASSETS, start=1):
+                print(f" {idx}. {label} ({path})")
+                gameplay_paths.append(path)
+
+            # Ensure the rotating gameplay assets exist
+            print("\033[96m[+] Ensuring gameplay assets are available...\033[0m")
             os.makedirs("assets/gameplay", exist_ok=True)
             import subprocess
-            subprocess.run([
-                "yt-dlp", "--download-sections", "*00:00:00-00:05:00",
-                "-f", "bestvideo[height<=1080][ext=mp4]+bestaudio[ext=m4a]/best[height<=1080][ext=mp4]/best",
-                "-o", gameplay_path,
-                gameplay_url
-            ])
+            for label, path, gameplay_url in GAMEPLAY_ASSETS:
+                if not gameplay_ready(path):
+                    print(f"  - Downloading {label}...")
+                    subprocess.run([
+                        sys.executable, "-m", "yt_dlp", "--no-playlist",
+                        "--js-runtimes", "node",
+                        "--remote-components", "ejs:github",
+                        "-f", "bestvideo[height<=1080][ext=mp4]+bestaudio[ext=m4a]/best[height<=1080][ext=mp4]/best",
+                        "--download-sections", "*00:00:00-00:05:00",
+                        "--merge-output-format", "mp4",
+                        "-o", path,
+                        gameplay_url
+                    ])
+        else:
+            print("\n\033[94m[?]\033[0m Select Gameplay Background:")
+            for idx, (label, path, _) in enumerate(GAMEPLAY_ASSETS, start=1):
+                print(f" {idx}. {label}")
+            gameplay_choice = input(f" Choice [1-{len(GAMEPLAY_ASSETS)}]: ").strip()
+            choice_index = int(gameplay_choice) - 1 if gameplay_choice.isdigit() and 1 <= int(gameplay_choice) <= len(GAMEPLAY_ASSETS) else 0
+            gameplay_path = GAMEPLAY_ASSETS[choice_index][1]
+            gameplay_url = GAMEPLAY_ASSETS[choice_index][2]
+
+            # Ensure gameplay asset
+            if not gameplay_ready(gameplay_path):
+                print(f"\033[93m[!] Downloading gameplay background...\033[0m")
+                os.makedirs("assets/gameplay", exist_ok=True)
+                import subprocess
+                subprocess.run([
+                    sys.executable, "-m", "yt_dlp", "--no-playlist",
+                    "--js-runtimes", "node",
+                    "--remote-components", "ejs:github",
+                    "-f", "bestvideo[height<=1080][ext=mp4]+bestaudio[ext=m4a]/best[height<=1080][ext=mp4]/best",
+                    "--download-sections", "*00:00:00-00:05:00",
+                    "--merge-output-format", "mp4",
+                    "-o", gameplay_path,
+                    gameplay_url
+                ])
 
     print("\n\033[96m[1/3]\033[0m Fetching Video Info & Heatmap...")
     main_info = fetch_youtube_video_info(video_url, download_video=False) # Always skip full download now
@@ -101,10 +156,25 @@ def run_youtube_cli():
     
     print(f"\033[92m[+]\033[0m Video duration: {int(total_duration)}s. Finding best moments...")
     
-    top_moments = get_top_heatmap_moments(heatmap, count=num_clips, min_distance=clip_duration + 10)
-    if not top_moments:
-        print("\033[93m[!] No heatmap data. Using default intervals.\033[0m")
-        top_moments = [{'start_time': i * (clip_duration + 60), 'value': 0} for i in range(num_clips) if i * (clip_duration + 60) < total_duration - clip_duration]
+    # Always boot up AI NLP Engine to structure the clips (Hook->Value->Payoff)
+    print("\033[96m[2/4]\033[0m Booting up AI NLP Engine for structural analysis...")
+    from nlp_clip_extractor import find_nlp_clips
+    
+    # We pass the heatmap data to the NLP engine so it can refine the exact start times
+    # around the heatmap peaks, ensuring the clip starts with a strong Hook.
+    refined_moments = find_nlp_clips(main_info, num_clips=num_clips, clip_duration=clip_duration, heatmap_moments=heatmap)
+    
+    if refined_moments:
+        top_moments = refined_moments
+        print(f"\033[92m[✓]\033[0m NLP Engine locked in {len(top_moments)} structurally perfect clips!")
+    else:
+        # Fallback if NLP fails (e.g. no transcripts available)
+        top_moments = get_top_heatmap_moments(heatmap, count=num_clips, min_distance=clip_duration + 10)
+        if not top_moments:
+            print("\033[93m[!] NLP failed & No heatmap data. Using mathematical fallback.\033[0m")
+            top_moments = [{'start_time': i * (clip_duration + 60), 'value': 0} for i in range(num_clips) if i * (clip_duration + 60) < total_duration - clip_duration]
+        else:
+            print("\033[93m[!] NLP failed. Falling back to pure heatmap data.\033[0m")
 
     output_dir = os.path.join("exports", "youtube")
     os.makedirs(output_dir, exist_ok=True)
@@ -124,13 +194,18 @@ def run_youtube_cli():
         print(f"      -> Starting Clip {i+1} [Rating: {rating}] at {int(start_time)}s...")
         
         if use_gameplay:
+            selected_gameplay = gameplay_path
+            if rotate_gameplay and gameplay_paths:
+                selected_gameplay = gameplay_paths[i % len(gameplay_paths)]
             success, res = create_split_screen_short(
                 main_video_path=main_path,
-                gameplay_video_path=gameplay_path,
+                gameplay_video_path=selected_gameplay,
                 output_path=out_file,
                 start_time=start_time,
                 duration=clip_duration,
                 main_audio_path=audio_path,
+                width=target_width,
+                height=target_height,
                 add_captions=use_captions,
                 forced_language=forced_lang
             )
@@ -141,6 +216,8 @@ def run_youtube_cli():
                 start_time=start_time,
                 duration=clip_duration,
                 main_audio_path=audio_path,
+                width=target_width,
+                height=target_height,
                 add_captions=use_captions,
                 forced_language=forced_lang
             )

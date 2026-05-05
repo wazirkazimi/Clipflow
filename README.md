@@ -1,69 +1,43 @@
-# 🎥 Clipflow: Pro AI Video Automation
+# Clipflow 🎬
 
-Clipflow is a high-performance toolkit designed to transform long-form content (YouTube and Instagram) into viral-ready vertical clips (9:16) with **AI Captions**, **Hinglish Support**, and **Parallel Processing**.
+Clipflow is an automated, AI-powered video clipping pipeline designed to turn long-form YouTube and Instagram videos into viral-ready, highly engaging Shorts, Reels, and TikToks. 
 
----
+It completely automates the extraction, transcription, captioning, and rendering processes.
 
-## ✨ Key Features
+## 🚀 Key Features
 
-### 🎙️ AI Viral Captions
-- **Word-Level Highlighting**: Dynamic "Karaoke style" captions that highlight the current word in high-contrast Cyan/Yellow.
-- **Premium Typography**: Uses high-impact **Impact** font, optimized for readability in social media feeds.
-- **Smart Chunking**: Automatically groups text into 2-3 word clusters to keep the screen clean and engaging.
+### 1. Hybrid AI Subtitles (Perfect Hinglish)
+- **Word-by-Word Animation**: Dynamically highlights the currently spoken word in bright yellow.
+- **Fast Pacing**: Snappy 2-3 word subtitle chunks to match fast-paced scrolling behavior.
+- **Center-Split Alignment**: Captions perfectly positioned on the split-screen boundary (`\an5`), ideal for vertical content.
+- **Smart Hinglish Transliteration**: Natively processes Hindi audio and transcribes it into perfect **Roman Hindi**. The pipeline intercepts Devanagari script, applies Schwa deletion (e.g. converting "तमा" to "tum"), and forces English keywords into **ALL CAPS** for maximum emphasis!
 
-### 🇮🇳 Hinglish & Multilingual Engine
-- **Automatic Transliteration**: Detects Hindi/Urdu speech and automatically converts it into **Hinglish** (Roman script) for global readability.
-- **Forced Language Mode**: Option to force Hindi detection for 100% accurate transliteration of complex speech.
+### 2. AI NLP Engine (Hook → Value → Payoff)
+- **Beyond Mathematical Trimming**: If a YouTube video lacks a Most-Replayed heatmap, the engine no longer falls back to random guessing.
+- **Structural Transcript Analysis**: The pipeline downloads the JSON3 auto-captions from YouTube directly and scans them for structural hooks ("secret", "mistake", "listen"), value propositions, and payoffs ("growth", "views").
+- **Speech Density Scoring**: Analyzes Words-Per-Second to identify high-energy, fast-paced moments that make viewers stop scrolling.
+- **Heatmap Synergy**: When a YouTube heatmap *is* available, the NLP Engine uses the retention peaks to find the exact sentence where the speaker drops the Hook, adjusting the clip's start time for maximum impact.
 
-### 🚀 Extreme Performance
-- **Parallel Processing**: Generates multiple clips simultaneously using multi-threading, cutting generation time by 300%.
-- **AI Model Caching**: Loads the Whisper AI model once and keeps it in memory for instant reuse across multiple clips.
-- **Smart Clipping**: Only transcribes the specific 60s segment needed, making the captioning process 100x faster than traditional methods.
+### 3. Modular Output Layouts
+- **Vertical Split-Screen**: Places the speaker up top and a high-retention gameplay video (like Minecraft Parkour or GTA V) on the bottom. Automatically rotates through gameplay backgrounds for batch processing.
+- **Full Widescreen (16:9)**: Toggleable option for producing standard YouTube clips without the split-screen.
 
-### 🎮 Immersive Composition
-- **Split-Screen Shorts**: Source video on top with immersive gameplay (Subway Surfers/Minecraft) on the bottom.
-- **Engagement Heatmaps**: Automatically finds the "hottest" moments on YouTube to ensure your clips have the highest viral potential.
+### 4. High-Performance Batch Processing
+- **Parallel FFmpeg Rendering**: Processes multiple vertical clips simultaneously.
+- **Thread-Safe AI Transcription**: Whisper AI runs synchronously to prevent memory overflows while FFmpeg handles the heavy video encoding concurrently.
+- **No-Download Streaming**: Uses `yt-dlp` to stream specific time chunks of the source video directly into FFmpeg, drastically reducing local storage requirements and increasing speed by 100x compared to downloading full 2-hour podcasts.
 
----
+## 🛠️ Usage
 
-## 🚀 Getting Started
-
-### 1. Activate Environment
-Always make sure your virtual environment is active before running:
-```powershell
-.\backend\venv\Scripts\activate
-```
-
-### 2. Install AI Dependencies
-```powershell
-pip install openai-whisper torch indic-transliteration
-```
-
-### 3. Run the Tools
-
-#### 📱 Instagram Reels
+To generate YouTube clips:
 ```bash
-python backend/instagram_terminal.py
+cd backend
+# Make sure your virtual environment is active!
+python youtube_terminal.py
 ```
+1. Paste the URL.
+2. Choose your clip duration and batch size.
+3. Choose vertical or horizontal orientation.
+4. The AI handles the rest, outputting your viral clips to `backend/exports/youtube/`.
 
-#### 📺 YouTube Shorts
-```bash
-python backend/youtube_terminal.py
-```
-
----
-
-## 📁 Project Structure
-```text
-Clipflow/
-├── backend/
-│   ├── instagram_terminal.py  # Instagram CLI with Caption Toggles
-│   ├── youtube_terminal.py    # Parallel processing YouTube CLI
-│   ├── ffmpeg_helper.py       # AI Captioning & Video Engine (The Brain)
-│   ├── youtube_helper.py      # Heatmap & Metadata Extraction
-│   └── assets/gameplay/       # Gameplay Background Library
-└── exports/                   # Final viral-ready MP4 clips
-```
-
----
-*Built for Viral Growth, Optimized for Speed.*
+*(Note: Advanced Face Tracking and Dead-Space Trimming modules were deprecated to prioritize extreme speed and cross-platform terminal stability without Unicode errors.)*

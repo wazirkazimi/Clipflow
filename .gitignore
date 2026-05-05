@@ -1,0 +1,9 @@
+backend/venv/
+backend/downloads/
+backend/exports/
+__pycache__/
+*.pyc
+.env
+backend/*.db
+node_modules/
+backend/assets/gameplay/*.mp4
